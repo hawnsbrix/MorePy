@@ -15,7 +15,7 @@ import time
 
 FOV_ALGO = 8
 FOV_LIGHT_WALLS = True
-TORCH_RADIUS = 3
+TORCH_RADIUS = 9
 
 SCREEN_WIDTH = 80
 SCREEN_HEIGHT = 50
@@ -34,8 +34,13 @@ MSG_HEIGHT = PANEL_HEIGHT - 1
 color_dark_wall = libtcod.darkest_grey
 color_dark_ground = libtcod.darker_grey
 
-color_light_wall = libtcod.darker_chartreuse
-color_light_ground = libtcod.desaturated_yellow
+color_light_wall = libtcod.desaturated_blue
+color_light_ground = libtcod.light_blue
+
+#parameters for dungeon generator
+ROOM_MAX_SIZE = 30
+ROOM_MIN_SIZE = 3
+MAX_ROOMS = 50
 
 
 ############
@@ -174,6 +179,16 @@ class Shape:
 		self.y1 = y 
 		self.x2 = x + w 
 		self.y2 = y + h 
+	
+	def center(self):
+		center_x = (self.x1 + self.x2) / 2 
+		center_y = (self.y1 + self.y2) / 2 
+		return (center_x, center_y)
+		
+	def intersect(self, other):
+		#returns true if this rectangle intersects with another one
+		return (self.x1 <= other.x2 and self.x2 >= other.x1 and
+				self.y1 <= other.y2 and self.y2 >= other.y1)	
 		
 ####################
 # GLOBAL FUNCTIONS #
@@ -195,22 +210,24 @@ def create_room(room):
 	height = room.y2 - room.y1
 	r = min(width, height) / 2
 	
-	#
-
-
-				
-#	for x in range(room.x1, room.x2 -20):
-#		for y in range(room.y1, room.y2 -20):
-#			if math.sqrt((x - cx) ** 2 + (y - cy) ** 2) <= r:
-#				map[x][y].blocked = False
-#				map[x][y].block_sight = False
+	#smaller radius to fit in the bigger one
+	width2 = room.x2 - room.x1 #- 1
+	height2 = room.y2 - room.y1 #- 1
+	r2 = min(width2, height2) / 3
 	
 	for x in range(room.x1, room.x2):
 		for y in range(room.y1, room.y2):
 			if math.sqrt((x - cx) ** 2 + (y - cy) ** 2) <= r:
 				map[x][y].blocked = True
 				map[x][y].block_sight = True
-	
+
+	for x in range(room.x1, room.x2):
+		for y in range(room.y1, room.y2):
+			if math.sqrt((x - cx) ** 2 + (y - cy) ** 2) <= r2:
+				map[x][y].blocked = False
+				map[x][y].block_sight = False	
+				
+			
 def make_map():
 	global map
 	
@@ -219,12 +236,7 @@ def make_map():
 		for y in range(MAP_HEIGHT) ]
 			for x in range(MAP_WIDTH) ]
 	
-	#create a room
-	rect1 = Shape(20, 15, 20, 30)
-	rect2 = Shape(50, 15, 10, 15)
-		
-	create_room(rect1)
-	create_room(rect2)
+
 		
 	#some cornerstones for testing stuff
 	#topleft
@@ -239,11 +251,65 @@ def make_map():
 	#bottomright
 	map[79][42].blocked = True
 	map[79][42].block_sight = True
+
+	rooms = []
+	num_rooms = 0
 	
-	player.x = 25
-	player.y = 23
+	# GO!
+	for r in range(MAX_ROOMS):
+		#random width and height
+		w = libtcod.random_get_int(0, ROOM_MIN_SIZE, ROOM_MAX_SIZE)
+		h = libtcod.random_get_int(0, ROOM_MIN_SIZE, ROOM_MAX_SIZE)
+		#random position without going out of boundaries of map
+		x = libtcod.random_get_int(0, 0, MAP_WIDTH - w - 2) #changed from 1 to see
+		y = libtcod.random_get_int(0, 0, MAP_HEIGHT - h - 2) #if it helps with the edge of the map (seems like it does)
+			
+		#making a shape 
+		new_room = Shape(x, y, w, h)
+		
+		#run through other rooms and see if they intersect with this one
+		failed = False
+		
+		for other_room in rooms:
+			if new_room.intersect(other_room):
+				#if width is lower than this number, go ahead anyway
+				#otherwise, nope, intersects and is also too big
+				if w and h > 15:			
+					failed = True
+					break	
+				if w and h < 3:
+					failed = True
+					break			
+					
+		if not failed:
+			
+			create_room(new_room)
+			
+			#center coords of new room, will be useful later
+			(new_x, new_y) = new_room.center()
+			
+			#optional bit of code to label rooms
+			#room_no = Object(new_x, new_y, chr(65+num_rooms), 'Room Number', libtcod.white, blocks=False)
+			#objects.insert(0, room_no) #draw early so monsters are drawn on top
+					
+
+			
+					
+					
+			#finally, append the new room to the list
+			rooms.append(new_room)
+			num_rooms += 1
 	
-	
+		if num_rooms == 0:
+		#first room, where player starts
+			player.x = new_x
+			player.y = new_y
+			
+			#make sure the players room is clear
+			map[new_x][new_y].blocked = False
+			map[new_x][new_y].block_sight = False
+
+			
 #fetching the coordinates of the mouse, returns them as string for display
 def get_coords_under_mouse():
 	global mouse
@@ -275,7 +341,8 @@ def display_cursor_trail():
 	mouseCoords = [[x, y]]
 	for i in range(len(mouseCoords)):
 		for j in range(len(mouseCoords[i])):
-			print mouseCoords[i],[j]
+			#print mouseCoords[i],[j]
+			libtcod.console_print_ex(con, x, y, libtcod.BKGND_NONE, libtcod.LEFT, ' ' )
 		
 		
 def message(new_msg, color = libtcod.white):
@@ -353,7 +420,7 @@ def render_all():
 		libtcod.mouse_show_cursor(False)
 		
 		display_cursor_tile()
-		display_cursor_trail()
+		#display_cursor_trail()
 		display_status()
 
 		
@@ -363,7 +430,7 @@ def render_all():
 		#BLIT PANEL#
 		libtcod.console_blit(panel, 0, 0, SCREEN_WIDTH, PANEL_HEIGHT, 0, 0, PANEL_Y)
 		
-		#BLIT OVERLAY
+		#BLIT OVERLAY#
 		libtcod.console_blit(overlay, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, 0, 0.5, 0.1)
 
 	
