@@ -102,7 +102,13 @@ def handle_keys():
 					player.move_towards(mouse.cx, mouse.cy)
 					#libtcod.console_put_char(con, player.x, player.y, '.', libtcod.green)
 					time.sleep(.05)
-					
+			
+			#rightclick teleports player to the cursor
+			if mouse.rbutton_pressed or mouse.rbutton:
+				player.x = mouse.cx
+				player.y = mouse.cy
+				
+			
 		fov_recompute = True
 		
 		
@@ -132,7 +138,7 @@ class Object:
 		
 		
 	def move(self, dx, dy):
-		if self.status is not "frozen": #and not map[self.x + dx][self.y + dy].blocked:
+		if not map[self.x + dx][self.y + dy].blocked:
 			self.x += dx 
 			self.y += dy
 			
@@ -168,7 +174,7 @@ class Object:
 				dy = 1 
 			if dy < 0:
 				dy = -1
-		
+
 		self.move(dx, dy)
 
 class Shape:
@@ -227,6 +233,38 @@ def create_room(room):
 				map[x][y].blocked = False
 				map[x][y].block_sight = False	
 				
+def display_border(char, color):
+	global map
+	
+	#define the border around the map
+	for y in range(MAP_HEIGHT - 8):
+		x = 0
+		libtcod.console_print_ex(overlay, x, y, libtcod.BKGND_NONE, libtcod.LEFT, char )
+		#block it
+		map[x][y].blocked = True
+		map[x][y].block_sight = True
+	
+	for y in range(MAP_HEIGHT - 8):
+		x = MAP_WIDTH - 1
+		libtcod.console_print_ex(overlay, x, y, libtcod.BKGND_NONE, libtcod.LEFT, char )
+		#block it
+		map[x][y].blocked = True
+		map[x][y].block_sight = True
+		
+	for x in range(MAP_WIDTH):
+		y = 0
+		libtcod.console_print_ex(overlay, x, y, libtcod.BKGND_NONE, libtcod.LEFT, char )
+		#block it
+		map[x][y].blocked = True
+		map[x][y].block_sight = True	
+		
+	for x in range(MAP_WIDTH):
+		y = MAP_HEIGHT - 8
+		libtcod.console_print_ex(overlay, x, y, libtcod.BKGND_NONE, libtcod.LEFT, char )
+		#block it
+		map[x][y].blocked = True
+		map[x][y].block_sight = True
+			
 			
 def make_map():
 	global map
@@ -309,7 +347,8 @@ def make_map():
 			map[new_x][new_y].blocked = False
 			map[new_x][new_y].block_sight = False
 
-			
+	
+
 #fetching the coordinates of the mouse, returns them as string for display
 def get_coords_under_mouse():
 	global mouse
@@ -422,6 +461,7 @@ def render_all():
 		display_cursor_tile()
 		#display_cursor_trail()
 		display_status()
+		display_border('>', libtcod.red)
 
 		
 		#BLIT CONSOLE#
